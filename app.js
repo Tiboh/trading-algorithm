@@ -12,19 +12,8 @@ AlgoType = {
     SIMPLE : 'simple'
 }
 
-function RunAlgo(algorithmType, csvFile, startDate, endDate) {
-    var data = new Data(csvFile);    
-    var account = new Account(10000);
-    var algo;
-
-    switch(algorithmType){
-        case AlgoType.STATIC: algo = new StaticAlgo(account); break;
-        case AlgoType.RANDOM: algo = new RandomAlgo(account); break;
-        case AlgoType.SIMPLE: algo = new SimpleAlgo(account); break;
-        default:
-            throw new Error("This algorithm type is not recognized '" + algorithmType + "'");
-            break;
-    }
+function RunAlgo(algo, account, exchangeRateUSDHistory) {
+    var util = new Util();
 
     var dateArray = [];
     var balanceUSDArray = [];
@@ -32,22 +21,43 @@ function RunAlgo(algorithmType, csvFile, startDate, endDate) {
     var fundsCryptoArray = [];
     var cryptoValueArray = [];
 
-    //var exchangeRateUSDHistory = data.getBuyPrice(startDate, endDate);
-    var exchangeRateUSDHistory = data.history;
+    var RSILowArray = [];
+    var RSILowDateArray = [];
+    var RSIHighArray = [];
+    var RSIHighDateArray = [];
+    var RSIValueArray = [];
+    var RSIValueDateArray = [];
+    var RSILowerLineArray = [];
+    var RSIHigherLineArray = [];
+
     for(i = 0 ; i < exchangeRateUSDHistory.length ; i++){
         algo.update(exchangeRateUSDHistory[i].Close);
-        dateArray.push(exchangeRateUSDHistory[i].Date);
+        var currentDate = exchangeRateUSDHistory[i].Date;
+        dateArray.push(currentDate);
         balanceUSDArray.push(account.balanceUSD(exchangeRateUSDHistory[i].Close));
         fundsUSDArray.push(account.fundsUSD);
         fundsCryptoArray.push(account.fundsCrypto);
         cryptoValueArray.push(exchangeRateUSDHistory[i].Close);
-    }
-    console.log(account.balanceUSD(exchangeRateUSDHistory[exchangeRateUSDHistory.length-1].Close));
-    
-    PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fundsCryptoArray, cryptoValueArray);
+
+        if(i > RSIPeriod){
+            var RSI = util.getRSI(exchangeRateUSDHistory.slice(i-RSIPeriod, i).map(a => a.Close), i);
+            if(RSI < RSILowValue){
+                RSILowArray.push(exchangeRateUSDHistory[i].Close);
+                RSILowDateArray.push(currentDate);
+            }else if(RSI > RSIHighValue){
+                RSIHighArray.push(exchangeRateUSDHistory[i].Close);
+                RSIHighDateArray.push(currentDate);
+            }
+            RSIValueArray.push(RSI);
+            RSIValueDateArray.push(currentDate);
+        }
+        RSILowerLineArray.push(RSILowValue);
+        RSIHigherLineArray.push(RSIHighValue);
+    }    
+    PlotData(algo.name, dateArray, balanceUSDArray, fundsUSDArray, fundsCryptoArray, cryptoValueArray, RSIPeriod, RSILowArray, RSILowDateArray, RSIHighArray, RSIHighDateArray, RSIValueArray, RSIValueDateArray, RSILowerLineArray, RSIHigherLineArray);
 }
 
-function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fundsCryptoArray, cryptoValueArray){
+function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fundsCryptoArray, cryptoValueArray, RSIPeriod, RSILowArray, RSILowDateArray, RSIHighArray, RSIHighDateArray, RSIValueArray, RSIValueDateArray, RSILowerLineArray, RSIHigherLineArray){
     var balanceUSDData =
     {
         x: dateArray,
@@ -68,7 +78,6 @@ function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fund
         y: fundsCryptoArray,
         type: "scatter",
         name: "Funds in Ƀ",
-        yaxis: "y2"
         };
     var cryptoValueData =
         {
@@ -77,17 +86,56 @@ function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fund
         type: "scatter",
         name: "Ƀ value in $"
         };
-    var data = [balanceUSDData,fundsUSDData,fundsCryptoData,cryptoValueData];
-
+    var RSILowData =
+        {
+        x: RSILowDateArray,
+        y: RSILowArray,
+        mode: "markers",
+        type: "scatter",
+        name: "RSI-"+RSIPeriod+" below "+RSILowValue
+        };
+    var RSIHighData =
+        {
+        x: RSIHighDateArray,
+        y: RSIHighArray,
+        mode: "markers",
+        type: "scatter",
+        name: "RSI-"+RSIPeriod+" above "+RSIHighValue
+        };
+    var RSIValueData ={
+        x: RSIValueDateArray,
+        y: RSIValueArray,
+        type: "scatter",
+        name: "RSI-"+RSIPeriod+" value",
+        yaxis: "y3",
+        xaxis: "x"
+        };
+    var RSIHigherLineData ={
+        x: dateArray,
+        y: RSIHigherLineArray,
+        type: "scatter",
+        yaxis: "y3",
+        xaxis: "x"
+        };
+    var RSILowerLineData ={
+        x: dateArray,
+        y: RSILowerLineArray,
+        type: "scatter",
+        yaxis: "y3",
+        xaxis: "x"
+        };
+    var data = [balanceUSDData,fundsUSDData,fundsCryptoData,cryptoValueData, RSILowData, RSIHighData, RSIValueData, RSIHigherLineData, RSILowerLineData];
+    //var data = [RSILowData, RSIHighData, RSIValueData];
+    
     var layout = {
         title: algorithmType,
         yaxis: {
-            title: "$"
+            title: "$",
+            domain: [0, 0.65]
         },
-        yaxis2: {
-        title: "Ƀ",
-        overlaying: "y",
-        side: "right"
+        yaxis3: {
+            title: "RSI",
+            domain: [0.75, 1]
         }
     };
     var graphOptions = {layout: layout, filename: "date-axes", fileopt: "overwrite"};
@@ -97,4 +145,28 @@ function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fund
     });
 }
 
-RunAlgo(AlgoType.STATIC, 'csv/BTC.csv', '2017-01-17', '2017-02-19');
+var data = new Data('csv/BTC_hour.csv');    
+var RSILowValue;
+var RSIHighValue;
+var RSIPeriod;
+var account;
+var util = new Util();
+var filename = "C:/Temp/result.csv";
+var balanceUSD = 0;
+for(k=0 ; k < 1 ; k++){
+    account = new Account(10000);
+    // RSILowValue = util.getRandomInt(2,50);
+    // RSIHighValue = util.getRandomInt(50,98);
+    // RSIPeriod = util.getRandomInt(2,100);
+    RSILowValue = 30;
+    RSIHighValue = 70;
+    RSIPeriod = 14;
+    var exchangeRateUSDHistory = data.history;    
+    RunAlgo(new SimpleAlgo(account, RSIPeriod, RSILowValue, RSIHighValue), account, exchangeRateUSDHistory);
+    balanceUSD = account.balanceUSD(exchangeRateUSDHistory[exchangeRateUSDHistory.length-1].Close);
+    var result = RSIPeriod+","+RSILowValue+","+RSIHighValue+","+balanceUSD;
+    console.log(result);
+    //util.writeFile(filename, RSIPeriod, RSILowValue, RSIHighValue, balanceUSD);
+}
+//}while(balanceUSD < 30000);
+//}while(account.balanceUSD(exchangeRateUSDHistory[exchangeRateUSDHistory.length-1]) < 50000);
