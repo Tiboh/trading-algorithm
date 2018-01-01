@@ -78,6 +78,7 @@ function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fund
         y: fundsCryptoArray,
         type: "scatter",
         name: "Funds in Ƀ",
+        yaxis: "y2"
         };
     var cryptoValueData =
         {
@@ -136,6 +137,11 @@ function PlotData(algorithmType, dateArray, balanceUSDArray, fundsUSDArray, fund
         yaxis3: {
             title: "RSI",
             domain: [0.75, 1]
+        },
+        yaxis2 : {
+            title: "Ƀ",
+            overlaying: "y",
+            side: "right"
         }
     };
     var graphOptions = {layout: layout, filename: "date-axes", fileopt: "overwrite"};
